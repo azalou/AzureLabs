@@ -72,7 +72,7 @@ rg_resourceGroups_map = {
 alert_email_set = ["azou8506@gmail.com"]
 
 # Azure AD Groups to create
-az_ad_group_map = {
+az_ad_rb_group_map = {
   "RB-ChiefTechnologyOfficers" = {
     name             = "RB-ChiefTechnologyOfficers"
     description      = "Role Based Chief Technology Officers group"
@@ -107,7 +107,9 @@ az_ad_group_map = {
     security_enabled = true
     mail_enabled     = false
   }
+}
 
+az_ad_l_group_map = {
   "L-Security-Admins" = {
     name             = "L-Security-Admins"
     description      = "Security Administrators group"

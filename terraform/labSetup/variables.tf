@@ -11,7 +11,10 @@ variable "location" {
 
 variable "rg_resourceGroups_map" {
   description = "Ressource group set used in the subscription"
-  type        = map(object({}))
+  type = map(object({
+    tags     = map(string)
+    location = string
+  }))
 }
 
 variable "tenant_id" {
@@ -36,14 +39,24 @@ variable "alert_email_set" {
 }
 
 # Map of Azure AD groups to create
-variable "az_ad_group_map" {
+variable "az_ad_rb_group_map" {
   description = "Map of Azure AD group display names to their properties. Example: { group1 = { security_enabled = true, mail_enabled = false } }"
   type = map(object({
     name             = string
     description      = string
     security_enabled = bool
     mail_enabled     = bool
-    member_of        = optional(list(string))
+  }))
+}
+
+variable "az_ad_l_group_map" {
+  description = "Map of Azure AD group display names to their properties. Example: { group1 = { security_enabled = true, mail_enabled = false } }"
+  type = map(object({
+    name             = string
+    description      = string
+    security_enabled = bool
+    mail_enabled     = bool
+    member_of        = set(string)
   }))
 }
 
@@ -51,8 +64,7 @@ variable "az_ad_group_map" {
 variable "az_ad_user_map" {
   description = "Map of Azure AD user principal names to their properties. Example: { user1 = { display_name = \"User One\", mail_nickname = \"userone\", password = \"P@ssw0rd!\" } }"
   type = map(object({
-    display_name  = string
-    mail_nickname = string
-    rb_group      = string
+    display_name = string
+    rb_group     = string
   }))
 }

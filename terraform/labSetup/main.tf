@@ -3,14 +3,20 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.0"
+      version = "> 3.0"
+    }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = " > 3.0"
     }
   }
 
-  backend "azurerm" {
-    use_azuread_auth = true
-  }
+  #  backend "azurerm" {
+  #    use_azuread_auth = true
+  #  }
 }
+
+provider "azuread" {}
 
 provider "azurerm" {
   features {}
@@ -29,21 +35,22 @@ locals {
     }
   }
 
-  L_groups_membership_assignments = merge([
-    for group_key, group in var.az_ad_group_map : [
-      for parent_group in lookup(group, "member_of", []) : {
-        key = "${group_key}-${parent_group}"
-        value = {
-          member_group = group_key
-          parent_group = parent_group
-        }
+  L_groups_membership_flat_list = flatten([
+    for group_key, group in var.az_ad_l_group_map : [
+      for parent_group in lookup(group, "member_of") : {
+        key          = "${group_key}-${parent_group}"
+        member_group = group_key
+        parent_group = parent_group
       }
     ]
-  ]...)
-
+  ])
+  L_groups_membership_assignments = {
+    for item in local.L_groups_membership_flat_list : item.key => item
+  }
 }
+
 ## Create resource groups for development environments
-resource "azurerm_resource_group" "rg" {
+resource "azurerm_resource_group" "dev_rgs" {
   for_each = local.rg_devel_name_map
 
   name     = each.key
@@ -52,18 +59,18 @@ resource "azurerm_resource_group" "rg" {
 }
 
 ## Create additional resource groups specified in tfvars
-resource "azurerm_resource_group" "additional_rgs" {
+resource "azurerm_resource_group" "mgm_rgs" {
   for_each = var.rg_resourceGroups_map
 
-  name     = each.value
-  location = var.location
+  name     = each.key
+  location = each.value.location
   tags     = each.value.tags
 }
 
-resource "azurerm_ad_group" "this" {
-  for_each = var.az_ad_group_map
+resource "azuread_group" "this" {
+  for_each = merge(var.az_ad_rb_group_map, var.az_ad_l_group_map)
 
-  name             = each.value.name
+  display_name     = each.value.name
   security_enabled = each.value.security_enabled
   description      = each.value.description
   mail_nickname    = "${each.value.name}-mailnick"
@@ -71,10 +78,10 @@ resource "azurerm_ad_group" "this" {
 
 ## Assign L-groups as members of RB groups
 resource "azuread_group_member" "L_group_assignments" {
-  for_each = { for k, v in local.L_groups_membership_assignments : k => v.value }
+  for_each = local.L_groups_membership_assignments
 
-  group_object_id  = azurerm_ad_group.this[each.value.parent_group].id
-  member_object_id = azurerm_ad_group.this[each.value.member_group].id
+  group_object_id  = azuread_group.this[each.value.parent_group].id
+  member_object_id = azuread_group.this[each.value.member_group].id
 }
 
 ## Create Key Vault to store user passwords
@@ -118,10 +125,9 @@ resource "azuread_user" "this" {
 }
 
 ## Assign users to their respective RB groups
-resource "azurerm_group_member" "user_rb_assignments" {
+resource "azuread_group_member" "user_rb_assignments" {
   for_each = var.az_ad_user_map
 
-  group_object_id  = azurerm_ad_group.this[each.value.rb_group].id
+  group_object_id  = azuread_group.this[each.value.rb_group].id
   member_object_id = azuread_user.this[each.key].id
-
 }
