@@ -67,6 +67,14 @@ resource "azurerm_resource_group" "mgm_rgs" {
   tags     = each.value.tags
 }
 
+resource "azurerm_log_analytics_workspace" "this" {
+  name                = "law-resourceMonitoring"
+  location            = var.location
+  resource_group_name = "rg-SharedResources"
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+}
+
 resource "azuread_group" "this" {
   for_each = merge(var.az_ad_rb_group_map, var.az_ad_l_group_map)
 
@@ -80,35 +88,46 @@ resource "azuread_group" "this" {
 resource "azuread_group_member" "L_group_assignments" {
   for_each = local.L_groups_membership_assignments
 
-  group_object_id  = azuread_group.this[each.value.parent_group].id
-  member_object_id = azuread_group.this[each.value.member_group].id
+  group_object_id  = azuread_group.this[each.value.parent_group].object_id
+  member_object_id = azuread_group.this[each.value.member_group].object_id
+  depends_on       = [azuread_group.this]
 }
 
 ## Create Key Vault to store user passwords
 resource "azurerm_key_vault" "user_password_kv" {
-  name                       = "kv-Secrets"
+  name                       = "kv-azou8506-Secrets"
   location                   = var.location
   resource_group_name        = "rg-SharedResources"
   tenant_id                  = var.tenant_id
   sku_name                   = "standard"
-  purge_protection_enabled   = false
+  purge_protection_enabled   = true
   soft_delete_retention_days = 7
+  enable_rbac_authorization  = true
+  depends_on                 = [azuread_group.this]
+}
+data "azurerm_monitor_diagnostic_categories" "kv_diagnostics_categories" {
+  resource_id = azurerm_key_vault.user_password_kv.id
+}
+## Enable Key Vault Logging to Log Analytics
+resource "azurerm_monitor_diagnostic_setting" "kv_diagnostics" {
+  name                           = "diag-kv-logs"
+  target_resource_id             = azurerm_key_vault.user_password_kv.id
+  log_analytics_workspace_id     = azurerm_log_analytics_workspace.this.id
+  log_analytics_destination_type = "Dedicated"
+
+  dynamic "enabled_log" {
+    for_each = data.azurerm_monitor_diagnostic_categories.kv_diagnostics_categories.log_category_types
+    content {
+      category = enabled_log.value
+    }
+  }
 }
 
-## Generate random passwords for Azure AD users
-resource "random_password" "user_passwords" {
-  for_each = var.az_ad_user_map
-  length   = 16
-  special  = true
-}
-## Store generated passwords in Key Vault
-resource "azurerm_key_vault_secret" "user_password_secrets" {
-  for_each     = random_password.user_passwords
+## Fetch existing passwords from Key Vault
+data "azurerm_key_vault_secret" "user_passwords" {
+  for_each     = var.az_ad_user_map
   name         = "userpwd-${each.key}"
-  value        = each.value.result
   key_vault_id = azurerm_key_vault.user_password_kv.id
-  content_type = "AzureADUserPassword"
-  depends_on   = [azurerm_key_vault.user_password_kv]
 }
 
 ## Create Azure AD users
@@ -118,7 +137,8 @@ resource "azuread_user" "this" {
   display_name          = each.value.display_name
   mail_nickname         = each.key
   force_password_change = false
-  password              = random_password.user_passwords[each.key].result
+  password              = data.azurerm_key_vault_secret.user_passwords[each.key].value
+  depends_on            = [azuread_group.this]
   lifecycle {
     ignore_changes = [password]
   }
@@ -128,6 +148,7 @@ resource "azuread_user" "this" {
 resource "azuread_group_member" "user_rb_assignments" {
   for_each = var.az_ad_user_map
 
-  group_object_id  = azuread_group.this[each.value.rb_group].id
-  member_object_id = azuread_user.this[each.key].id
+  group_object_id  = azuread_group.this[each.value.rb_group].object_id
+  member_object_id = azuread_user.this[each.key].object_id
+  depends_on       = [azuread_user.this]
 }

@@ -1,0 +1,20 @@
+{
+  "attributes": {
+    "created": "2026-01-03T20:55:16+00:00",
+    "enabled": true,
+    "expires": null,
+    "notBefore": null,
+    "recoverableDays": 7,
+    "recoveryLevel": "CustomizedRecoverable+Purgeable",
+    "updated": "2026-01-03T20:55:16+00:00"
+  },
+  "contentType": null,
+  "id": "https://kv-azou8506-secrets.vault.azure.net/secrets/userpwd-HenryBlack001/ca6b1e7967154a78a1e5724605c428cc",
+  "kid": null,
+  "managed": null,
+  "name": "userpwd-HenryBlack001",
+  "tags": {
+    "file-encoding": "utf-8"
+  },
+  "value": "J]BF"
+}

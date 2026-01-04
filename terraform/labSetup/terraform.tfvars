@@ -53,7 +53,7 @@ rg_dev_env_basename_set = ["rg-VMInfrastructure", "rg-WebApps"]
 location                = "canadacentral"
 
 rg_resourceGroups_map = {
-  "rg_SharedResources" = {
+  "rg-SharedResources" = {
     tags = {
       "BU" = "Infrastructure"
     }
